@@ -2,14 +2,14 @@
 
 use std::collections::hash_map::{Entry, HashMap};
 use std::hash::Hash;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock, LockResult};
 
 /// Cache that remembers the result for each key.
 #[derive(Debug, Default)]
 pub struct Cache<K, V> {
     // todo! This is an example cache type. Build your own cache type that satisfies the
     // specification for `get_or_insert_with`.
-    inner: Mutex<HashMap<K, V>>,
+    inner: Mutex<HashMap<K, Arc<RwLock<Option<V>>>>>,
 }
 
 impl<K: Eq + Hash + Clone, V: Clone> Cache<K, V> {
@@ -24,6 +24,29 @@ impl<K: Eq + Hash + Clone, V: Clone> Cache<K, V> {
     /// duplicate the work. That is, `f` should be run only once for each key. Specifically, even
     /// for the concurrent invocations of `get_or_insert_with(key, f)`, `f` is called only once.
     pub fn get_or_insert_with<F: FnOnce(K) -> V>(&self, key: K, f: F) -> V {
-        todo!()
+        use std::collections::hash_map::Entry;
+
+        let mut map = self.inner.lock().unwrap();
+
+        let (found, has_inserted) = match map.entry(key.clone()) {
+            Entry::Occupied(o) => (o.into_mut().clone(), false),
+            Entry::Vacant(v) => {
+                let placeholder = Arc::new(RwLock::new(None));
+                let p = v.insert(placeholder);
+                (p.clone(), true)
+            }
+        };
+        let first_write_lock = if has_inserted { Some(found.write().unwrap()) } else { None };
+        drop(map);
+
+        match first_write_lock {
+            Some(mut write_guard) => *write_guard = Some(f(key)),
+            None => (),
+        }
+        // first_write_lock moved out.
+
+        let ret = found.read().unwrap().clone().unwrap();
+
+        ret
     }
 }
