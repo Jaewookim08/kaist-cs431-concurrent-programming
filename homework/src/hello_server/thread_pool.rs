@@ -21,7 +21,7 @@ impl Drop for Worker {
     /// When dropped, the thread's `JoinHandle` must be `join`ed.  If the worker panics, then this
     /// function should panic too.  NOTE: that the thread is detached if not `join`ed explicitly.
     fn drop(&mut self) {
-        self.thread.take().unwrap().join();
+        self.thread.take().unwrap().join().expect("Worker panicked");
     }
 }
 
