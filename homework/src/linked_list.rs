@@ -731,23 +731,28 @@ impl<T> IterMut<'_, T> {
     /// ```
     #[inline]
     pub fn insert_next(&mut self, element: T) {
-        let node = Box::into_raw(Box::new(Node::new(element)));
         unsafe {
+            let node = &mut *Box::into_raw(Box::new(Node::new(element)));
+
             node.next = self.head;
-            node.prev = if self.head.is_null() { ptr::null_mut() } else { self.head.prev };
+
+            let prev = if self.head.is_null() {
+                let ret = self.list.tail;
+                self.list.tail = node;
+                ret
+            } else { (*self.head).prev };
+            node.prev = prev;
+
 
             if !self.head.is_null() {
-                self.head.prev = node;
-                if !self.head.prev.is_null() {
-                    self.head.prev.next = node;
-                }
+                (*self.head).prev = node;
+            }
+            if !prev.is_null() {
+                (*prev).next = node;
             }
 
-            if self.head == self.list.head {
+            if self.list.head == self.head {
                 self.list.head = node;
-            }
-            if self.list.tail.is_null() {
-                self.list.tail = node;
             }
             self.list.len += 1;
         }
@@ -770,7 +775,13 @@ impl<T> IterMut<'_, T> {
     /// ```
     #[inline]
     pub fn peek_next(&mut self) -> Option<&mut T> {
-        todo!()
+        if self.len == 0 {
+            None
+        } else {
+            unsafe { self.head.as_mut() }.map(|node| {
+                &mut node.element
+            })
+        }
     }
 }
 
