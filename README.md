@@ -16,7 +16,7 @@
   + We assume you read each announcement within 24 hours.
   + We strongly recommend you to watch the repository and use desktop/mobile Zulip client for prompt access to the announcements.
 - TA: [Kyeongmin Cho](https://cp.kaist.ac.kr/kyeongmin.cho) (head), [Jaehwang Jung](https://cp.kaist.ac.kr/jaehwang.jung)
-  + Office Hour: TBA ~~Tue & Fri 4:00pm-5:15pm~~, Online. It is not required, but if you want to come, do so by TBA ~~4:15pm~~. We will announce link of online meeting in [chat](https://cp-cs220.kaist.ac.kr/#narrow/stream/15-cs220-announcement) before every office hour. See [below](#communication) for office hour policy.
+  + Office Hour: Fri 9:00am-12:00pm, [Zoom room](https://zoom.us/j/4842624821)(The passcode is same as the class). It is not required, but if you want to come, do so by 9:30am. See [below](#communication) for office hour policy.
 
 
 ### Online sessions
@@ -30,6 +30,8 @@ Due to COVID-19, we're going to conduct online sessions for this semester.
     + Turn on English subtitle at YouTube, if necessary.
 
 - For live sessions, we'll meet at the [Zoom room](https://kaist.zoom.us/my/jeehoon.kang).
+- You can download the recording for the first session here: https://klms.kaist.ac.kr/mod/courseboard/article.php?id=576413&bid=72724&bwid=249744
+- The later lectures have almost the same content as previous semesters, so please watch YouTube videos instead.
 
 
 
@@ -247,7 +249,7 @@ Make sure you're capable of using the following development tools:
 
     + The id is your student id (e.g., 20071163).
 
-    + Log in with your email address and the new password.
+    + Log in with your student id and the new password.
       If you cannot, please contact the head TA in the chat.
 
     + Sign [the honor code](https://gg.kaist.ac.kr/quiz/73/) by September 10th.
