@@ -294,7 +294,25 @@ impl<T> LinkedList<T> {
     /// assert!(list1.is_empty());
     /// ```
     pub fn prepend(&mut self, other: &mut Self) {
-        todo!()
+        unsafe {
+            if other.head.is_null() || other.tail.is_null() {
+                assert!(other.head.is_null() && other.tail.is_null());
+                return;
+            }
+
+            if self.head.is_null() || self.tail.is_null() {
+                assert!(self.head.is_null() && self.tail.is_null());
+                self.head = other.head;
+                self.tail = other.tail;
+                self.len = other.len;
+            } else {
+                (*self.head).prev = other.tail;
+                (*other.tail).next = self.head;
+                self.head = other.head;
+                self.len += other.len;
+            }
+            *other = LinkedList::new();
+        }
     }
 
     /// Provides a forward iterator.
@@ -447,8 +465,8 @@ impl<T> LinkedList<T> {
     /// assert_eq!(list.contains(&10), false);
     /// ```
     pub fn contains(&self, x: &T) -> bool
-    where
-        T: PartialEq<T>,
+        where
+            T: PartialEq<T>,
     {
         self.iter().any(|e| e == x)
     }
@@ -487,7 +505,7 @@ impl<T> LinkedList<T> {
     /// assert_eq!(dl.front(), Some(&1));
     ///
     /// match dl.front_mut() {
-    ///     None => {},
+    ///     None => {}
     ///     Some(x) => *x = 5,
     /// }
     /// assert_eq!(dl.front(), Some(&5));
@@ -531,7 +549,7 @@ impl<T> LinkedList<T> {
     /// assert_eq!(dl.back(), Some(&1));
     ///
     /// match dl.back_mut() {
-    ///     None => {},
+    ///     None => {}
     ///     Some(x) => *x = 5,
     /// }
     /// assert_eq!(dl.back(), Some(&5));
@@ -744,7 +762,7 @@ impl<T> DoubleEndedIterator for IntoIter<T> {
 }
 
 impl<T> FromIterator<T> for LinkedList<T> {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item=T>>(iter: I) -> Self {
         let mut list = Self::new();
         iter.into_iter().for_each(|elt| list.push_back(elt));
         list
