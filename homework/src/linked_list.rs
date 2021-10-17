@@ -294,24 +294,18 @@ impl<T> LinkedList<T> {
     /// assert!(list1.is_empty());
     /// ```
     pub fn prepend(&mut self, other: &mut Self) {
-        unsafe {
-            if other.head.is_null() || other.tail.is_null() {
-                assert!(other.head.is_null() && other.tail.is_null());
-                return;
+        if self.head.is_null() {
+            mem::swap(self, other);
+        } else {
+            let other_tail = mem::replace(&mut other.tail, ptr::null_mut());
+            if !other_tail.is_null() {
+                unsafe {
+                    (*self.head).prev = other_tail;
+                    (*other_tail).next = self.head;
+                }
+                self.head = mem::replace(&mut other.head, ptr::null_mut());
+                self.len += mem::replace(&mut other.len, 0);
             }
-
-            if self.head.is_null() || self.tail.is_null() {
-                assert!(self.head.is_null() && self.tail.is_null());
-                self.head = other.head;
-                self.tail = other.tail;
-                self.len = other.len;
-            } else {
-                (*self.head).prev = other.tail;
-                (*other.tail).next = self.head;
-                self.head = other.head;
-                self.len += other.len;
-            }
-            *other = LinkedList::new();
         }
     }
 
@@ -531,7 +525,7 @@ impl<T> LinkedList<T> {
     /// ```
     #[inline]
     pub fn back(&self) -> Option<&T> {
-        todo!()
+        unsafe { self.tail.as_ref().map(|node| &node.element) }
     }
 
     /// Provides a mutable reference to the back element, or `None` if the list
