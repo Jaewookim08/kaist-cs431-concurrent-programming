@@ -171,7 +171,23 @@ impl<T> LinkedList<T> {
     /// Removes and returns the node at the back of the list.
     #[inline]
     fn pop_back_node(&mut self) -> Option<Box<Node<T>>> {
-        todo!()
+        if self.tail.is_null() {
+            return None;
+        }
+
+        unsafe {
+            let node = Box::from_raw(self.tail);
+            self.tail = node.prev;
+
+            if self.tail.is_null() {
+                self.head = ptr::null_mut();
+            } else {
+                (*self.tail).next = ptr::null_mut();
+            }
+
+            self.len -= 1;
+            Some(node)
+        }
     }
 }
 
