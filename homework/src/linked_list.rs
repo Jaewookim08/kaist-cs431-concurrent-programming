@@ -151,7 +151,7 @@ impl<T> LinkedList<T> {
 
     /// Adds the given node to the back of the list.
     #[inline]
-    fn push_back_node(&mut self, node: Box<Node<T>>) {
+    fn push_back_node(&mut self, mut node: Box<Node<T>>) {
         unsafe {
             node.prev = self.tail;
             node.next = ptr::null_mut();
