@@ -571,7 +571,7 @@ impl<T> LinkedList<T> {
     /// assert_eq!(dl.front().unwrap(), &1);
     /// ```
     pub fn push_front(&mut self, elt: T) {
-        todo!()
+        self.push_front_node(Box::new(Node::new(elt)));
     }
 
     /// Removes the first element and returns it, or `None` if the list is
@@ -679,14 +679,30 @@ impl<'a, T> Iterator for IterMut<'a, T> {
 
     #[inline]
     fn next(&mut self) -> Option<&'a mut T> {
-        todo!()
+        if self.len == 0 {
+            None
+        } else {
+            unsafe { self.head.as_mut() }.map(|node| {
+                self.len -= 1;
+                self.head = node.next;
+                &mut node.element
+            })
+        }
     }
 }
 
 impl<'a, T> DoubleEndedIterator for IterMut<'a, T> {
     #[inline]
     fn next_back(&mut self) -> Option<&'a mut T> {
-        todo!()
+        if self.len == 0 {
+            None
+        } else {
+            unsafe { self.tail.as_mut() }.map(|node| {
+                self.len -= 1;
+                self.tail = node.prev;
+                &mut node.element
+            })
+        }
     }
 }
 
@@ -715,7 +731,26 @@ impl<T> IterMut<'_, T> {
     /// ```
     #[inline]
     pub fn insert_next(&mut self, element: T) {
-        todo!()
+        let node = Box::into_raw(Box::new(Node::new(element)));
+        unsafe {
+            node.next = self.head;
+            node.prev = if self.head.is_null() { ptr::null_mut() } else { self.head.prev };
+
+            if !self.head.is_null() {
+                self.head.prev = node;
+                if !self.head.prev.is_null() {
+                    self.head.prev.next = node;
+                }
+            }
+
+            if self.head == self.list.head {
+                self.list.head = node;
+            }
+            if self.list.tail.is_null() {
+                self.list.tail = node;
+            }
+            self.list.len += 1;
+        }
     }
 
     /// Provides a reference to the next element, without changing the iterator.
