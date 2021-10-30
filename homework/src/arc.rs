@@ -41,6 +41,7 @@ pub struct Arc<T> {
 }
 
 unsafe impl<T: Sync + Send> Send for Arc<T> {}
+
 unsafe impl<T: Sync + Send> Sync for Arc<T> {}
 
 impl<T> Arc<T> {
@@ -58,6 +59,7 @@ struct ArcInner<T> {
 }
 
 unsafe impl<T: Sync + Send> Send for ArcInner<T> {}
+
 unsafe impl<T: Sync + Send> Sync for ArcInner<T> {}
 
 impl<T> Arc<T> {
@@ -91,14 +93,22 @@ impl<T> Arc<T> {
     /// ```
     #[inline]
     pub fn get_mut(this: &mut Self) -> Option<&mut T> {
-        todo!()
+        if this.is_unique() {
+            unsafe {
+                Some(&mut this.ptr.as_mut().data)
+            }
+        } else {
+            None
+        }
     }
 
     // Used in `get_mut` and `make_mut` to check if the given `Arc` is the unique reference to the
     // underlying data.
     #[inline]
-    fn is_unique(&mut self) -> bool {
-        todo!()
+    fn is_unique(&self) -> bool {
+        unsafe {
+            1 == Self::count(self)
+        }
     }
 
     /// Returns a mutable reference into the given `Arc` without any check.
@@ -149,7 +159,9 @@ impl<T> Arc<T> {
     /// ```
     #[inline]
     pub fn count(this: &Self) -> usize {
-        todo!()
+        unsafe {
+            this.inner().count.load(Ordering::Acquire)
+        }
     }
 
     #[inline]
@@ -200,7 +212,15 @@ impl<T> Arc<T> {
     /// ```
     #[inline]
     pub fn try_unwrap(this: Self) -> Result<T, Self> {
-        todo!()
+        if this.is_unique() {
+            unsafe {
+                let data = Box::from_raw(this.ptr.as_ptr()).data;
+                mem::forget(this);
+                Ok(data)
+            }
+        } else {
+            Err(this)
+        }
     }
 }
 
@@ -232,7 +252,20 @@ impl<T: Clone> Arc<T> {
     /// ```
     #[inline]
     pub fn make_mut(this: &mut Self) -> &mut T {
-        todo!()
+        let inner = unsafe { this.ptr.as_mut() };
+
+        if inner.count.fetch_sub(1, Ordering::Acquire) == 1 {
+            let prev_count = inner.count.fetch_add(1, Ordering::Relaxed);
+            assert_eq!(prev_count, 0);
+            &mut inner.data
+        } else {
+            let new_inner = Box::new(ArcInner {
+                count: AtomicUsize::new(1),
+                data: inner.data.clone(),
+            });
+            this.ptr = Box::leak(new_inner).into();
+            unsafe { &mut this.ptr.as_mut().data }
+        }
     }
 }
 
@@ -257,7 +290,20 @@ impl<T> Clone for Arc<T> {
     /// ```
     #[inline]
     fn clone(&self) -> Arc<T> {
-        todo!()
+        let inner = unsafe { self.ptr.as_ref() };
+        // Using a relaxed ordering is alright here as we don't need any atomic
+        // synchronization here as we're not modifying or accessing the inner
+        // data.
+        let old_rc = inner.count.fetch_add(1, Ordering::Relaxed);
+
+        if old_rc >= isize::MAX as usize {
+            std::process::abort();
+        }
+
+        Self {
+            ptr: self.ptr,
+            phantom: PhantomData,
+        }
     }
 }
 
@@ -296,7 +342,16 @@ impl<T> Drop for Arc<T> {
     /// drop(foo2);   // Prints "dropped!"
     /// ```
     fn drop(&mut self) {
-        todo!()
+        let inner = unsafe { self.ptr.as_ref() };
+        if inner.count.fetch_sub(1, Ordering::Release) != 1 {
+            return;
+        }
+        // This fence is needed to prevent reordering of the use and deletion
+        // of the data.
+        fence(Ordering::Acquire);
+        // This is safe as we know we have the last pointer to the `ArcInner`
+        // and that its pointer is valid.
+        unsafe { Box::from_raw(self.ptr.as_ptr()); }
     }
 }
 
