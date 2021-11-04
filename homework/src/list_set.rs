@@ -1,4 +1,5 @@
 #![allow(clippy::mutex_atomic)]
+
 use std::cmp;
 use std::ptr;
 use std::sync::{Mutex, MutexGuard};
@@ -10,6 +11,7 @@ struct Node<T> {
 }
 
 unsafe impl<T> Send for Node<T> {}
+
 unsafe impl<T> Sync for Node<T> {}
 
 /// Concurrent sorted singly linked list using lock-coupling.
@@ -19,6 +21,7 @@ pub struct OrderedListSet<T> {
 }
 
 unsafe impl<T> Send for OrderedListSet<T> {}
+
 unsafe impl<T> Sync for OrderedListSet<T> {}
 
 // reference to the `next` field of previous node which points to the current node
@@ -37,7 +40,21 @@ impl<'l, T: Ord> Cursor<'l, T> {
     /// Move the cursor to the position of key in the sorted list. If the key is found in the list,
     /// return `true`.
     fn find(&mut self, key: &T) -> bool {
-        todo!()
+        loop {
+            let node_p = *self.0;
+            if node_p.is_null() {
+                return false;
+            }
+
+            let data = unsafe { &(*node_p).data };
+            if data == key {
+                return true;
+            } else if data > key {
+                return false;
+            } else {
+                self.0 = unsafe { (*node_p).next.lock().unwrap() };
+            }
+        }
     }
 }
 
@@ -52,22 +69,42 @@ impl<T> OrderedListSet<T> {
 
 impl<T: Ord> OrderedListSet<T> {
     fn find(&self, key: &T) -> (bool, Cursor<T>) {
-        todo!()
+        let mut cursor = Cursor(self.head.lock().unwrap());
+        (cursor.find(key), cursor)
     }
 
     /// Returns `true` if the set contains the key.
     pub fn contains(&self, key: &T) -> bool {
-        todo!()
+        let (b, _) = self.find(key);
+        b
     }
 
     /// Insert a key to the set. If the set already has the key, return the provided key in `Err`.
     pub fn insert(&self, key: T) -> Result<(), T> {
-        todo!()
+        match self.find(&key) {
+            (true, _) => Err(key),
+            (false, Cursor(mut guard)) => {
+                let next_node = unsafe { *(**guard).next.lock().unwrap() }; // Todo: ?
+                let new_node = Node::new(key, next_node);
+                (*guard) = new_node;
+                Ok(())
+            }
+        }
     }
 
     /// Remove the key from the set and return it.
     pub fn remove(&self, key: &T) -> Result<T, ()> {
-        todo!()
+        match self.find(&key) {
+            (true, Cursor(mut guard)) => {
+                assert!(!(*guard).is_null());
+                assert!(unsafe { (**guard).data.eq(key) });
+                let next_node = unsafe { *(**guard).next.lock().unwrap() };
+                let data = unsafe { Box::from_raw(*guard).data };
+                *guard = next_node;
+                Ok(data)
+            }
+            (false, _) => Err(())
+        }
     }
 }
 
