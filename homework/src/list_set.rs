@@ -126,6 +126,7 @@ impl<'l, T> Iterator for Iter<'l, T> {
             Some(guard) => {
                 let node_p = **guard;
                 if unsafe { node_p.is_null() } {
+                    self.0 = None;
                     return None;
                 }
 
