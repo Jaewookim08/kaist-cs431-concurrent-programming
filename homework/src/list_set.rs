@@ -84,7 +84,7 @@ impl<T: Ord> OrderedListSet<T> {
         match self.find(&key) {
             (true, _) => Err(key),
             (false, Cursor(mut guard)) => {
-                let next_node = if (*guard).is_null() { ptr::null_mut() } else { unsafe { *(**guard).next.lock().unwrap() } };
+                let next_node = *guard;
                 let new_node = Node::new(key, next_node);
                 (*guard) = new_node;
                 Ok(())
@@ -142,8 +142,6 @@ impl<'l, T> Iterator for Iter<'l, T> {
 
 impl<T> Drop for OrderedListSet<T> {
     fn drop(&mut self) {
-        return;
-
         let guard = self.head.lock().unwrap();
         if (*guard).is_null() {
             return;
