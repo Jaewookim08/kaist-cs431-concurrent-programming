@@ -84,7 +84,7 @@ impl<T: Ord> OrderedListSet<T> {
         match self.find(&key) {
             (true, _) => Err(key),
             (false, Cursor(mut guard)) => {
-                let next_node = unsafe { *(**guard).next.lock().unwrap() }; // Todo: ?
+                let next_node = if (*guard).is_null() { ptr::null_mut() } else { unsafe { *(**guard).next.lock().unwrap() } };
                 let new_node = Node::new(key, next_node);
                 (*guard) = new_node;
                 Ok(())
@@ -122,13 +122,46 @@ impl<'l, T> Iterator for Iter<'l, T> {
     type Item = &'l T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!()
+        match &self.0 {
+            Some(guard) => {
+                let node_p = **guard;
+                if unsafe { node_p.is_null() } {
+                    return None;
+                }
+
+                let data = unsafe { &(*node_p).data };
+
+                self.0 = unsafe { Some((*node_p).next.lock().unwrap()) };
+
+                Some(data)
+            }
+            None => None
+        }
     }
 }
 
 impl<T> Drop for OrderedListSet<T> {
     fn drop(&mut self) {
-        todo!()
+        return;
+
+        let guard = self.head.lock().unwrap();
+        if (*guard).is_null() {
+            return;
+        }
+
+        let mut curr_node = unsafe { Box::from_raw(*guard) };
+
+        loop {
+            let next_guard = curr_node.next.lock().unwrap();
+            if (*next_guard).is_null() {
+                return;
+            }
+
+            let next_node = unsafe { Box::from_raw(*next_guard) };
+
+            drop(next_guard);
+            curr_node = next_node;
+        }
     }
 }
 
