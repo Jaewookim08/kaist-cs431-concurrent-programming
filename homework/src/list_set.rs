@@ -1,5 +1,4 @@
 #![allow(clippy::mutex_atomic)]
-
 use std::cmp;
 use std::ptr;
 use std::sync::{Mutex, MutexGuard};
@@ -10,9 +9,8 @@ struct Node<T> {
     next: Mutex<*mut Node<T>>,
 }
 
-unsafe impl<T> Send for Node<T> {}
-
-unsafe impl<T> Sync for Node<T> {}
+unsafe impl<T: Send> Send for Node<T> {}
+unsafe impl<T: Sync> Sync for Node<T> {}
 
 /// Concurrent sorted singly linked list using lock-coupling.
 #[derive(Debug)]
@@ -20,9 +18,8 @@ pub struct OrderedListSet<T> {
     head: Mutex<*mut Node<T>>,
 }
 
-unsafe impl<T> Send for OrderedListSet<T> {}
-
-unsafe impl<T> Sync for OrderedListSet<T> {}
+unsafe impl<T: Send> Send for OrderedListSet<T> {}
+unsafe impl<T: Sync> Sync for OrderedListSet<T> {}
 
 // reference to the `next` field of previous node which points to the current node
 struct Cursor<'l, T>(MutexGuard<'l, *mut Node<T>>);
