@@ -203,13 +203,13 @@ impl<T> GrowableArray<T> {
     /// Returns the reference to the `Atomic` pointer at `index`. Allocates new segments if
     /// necessary.
     pub fn get(&self, mut index: usize, guard: &Guard) -> &Atomic<T> {
-        let root =
+        let (root, root_height) =
             loop {
                 let root = self.root.load(Ordering::Acquire, guard);
                 let root_height = root.tag();
 
                 if !root.is_null() && index >> (root_height * SEGMENT_LOGSIZE) == 0 {
-                    break root;
+                    break (root, root_height);
                 }
 
                 let new_top_segment = Owned::new(Segment::new());
@@ -221,7 +221,31 @@ impl<T> GrowableArray<T> {
                 let _ = self.root.compare_exchange(root, new_root, Ordering::Release, Ordering::Relaxed, guard);
             };
 
-        // self.root.compare_exchange(root, new_root.with_tag(new_root_height), Ordering::AcqRel, Ordering::Relaxed, guard);
-        todo!()
+        let ret = unsafe {
+            let mut curr_segment = root;
+            let mut curr_height = root_height - 1;
+
+            loop {
+                let ind = index_nth_part(index, curr_height);
+
+
+                if i == 0 {
+                    break &*(segment.get_unchecked(ind) as *const _ as *const Atomic<T>);
+                }
+
+                let next_atomic = &((*curr_segment.deref())[ind]);
+
+                curr_segment = loop {
+                    let ns = next_atomic.load(Ordering::Acquire);
+                    if ns != 0 {
+                        break Shared::<Segment>::from_usize(ns);
+                    }
+                    next_atomic.compare_exchange(ns, Owned::new(Segment::new()).into_usize(), Ordering::Release, Ordering::Relaxed);
+                };
+                curr_height -= 1;
+            }
+        };
+
+        ret
     }
 }
