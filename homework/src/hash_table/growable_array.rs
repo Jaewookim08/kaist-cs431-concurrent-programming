@@ -208,7 +208,7 @@ impl<T> GrowableArray<T> {
                 let root = self.root.load(Ordering::Acquire, guard);
                 let root_height = root.tag();
 
-                if index_nth_part(index, root_height) == 0 {
+                if !root.is_null() && index_nth_part(index, root_height) == 0 {
                     break root;
                 }
 
