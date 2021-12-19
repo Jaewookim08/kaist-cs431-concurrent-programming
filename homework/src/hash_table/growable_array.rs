@@ -5,6 +5,7 @@ use core::marker::PhantomData;
 use core::mem;
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicUsize, Ordering};
+use std::ptr::null;
 use crossbeam_epoch::{unprotected, Atomic, Guard, Owned, Pointer, Shared};
 
 /// Growable array of `Atomic<T>`.
@@ -45,7 +46,8 @@ use crossbeam_epoch::{unprotected, Atomic, Guard, Owned, Pointer, Shared};
 ///                                         +---+
 /// ```
 ///
-/// When you store `fox` at `0b111011`, it is clear that there is no room for indices larger than
+/// When you store `fox` at `0b111
+/// `, it is clear that there is no room for indices larger than
 /// `0b111`. So it first allocates another segment for upper 3 bits and moves the previous root
 /// segment (`0b000XXX` segment) under the `0b000XXX` branch of the the newly allocated segment.
 ///
@@ -66,7 +68,7 @@ use crossbeam_epoch::{unprotected, Atomic, Guard, Owned, Pointer, Shared};
 ///                                                                |
 ///                                                                v
 ///                                                              +---+
-///                                                              |cat|
+///                                                 i             |cat|
 ///                                                              +---+
 /// ```
 ///
@@ -183,6 +185,12 @@ impl<T> Default for GrowableArray<T> {
     }
 }
 
+fn index_nth_part(index: usize, n: usize) -> usize {
+    let ret = index >> (n * SEGMENT_LOGSIZE);
+    let ret = ret & ((1 << SEGMENT_LOGSIZE) - 1);
+    ret
+}
+
 impl<T> GrowableArray<T> {
     /// Create a new growable array.
     pub fn new() -> Self {
@@ -195,6 +203,25 @@ impl<T> GrowableArray<T> {
     /// Returns the reference to the `Atomic` pointer at `index`. Allocates new segments if
     /// necessary.
     pub fn get(&self, mut index: usize, guard: &Guard) -> &Atomic<T> {
+        let root =
+            loop {
+                let root = self.root.load(Ordering::Acquire, guard);
+                let root_height = root.tag();
+
+                if index_nth_part(index, root_height) == 0 {
+                    break root;
+                }
+
+                let new_top_segment = Owned::new(Segment::new());
+                (*new_top_segment).inner[0].store(root.into_usize(), Ordering::Release);
+
+                let new_root = new_top_segment;
+                let new_root = new_root.with_tag(root_height + 1);
+
+                let _ = self.root.compare_exchange(root, new_root, Ordering::Release, Ordering::Relaxed, guard);
+            };
+
+        // self.root.compare_exchange(root, new_root.with_tag(new_root_height), Ordering::AcqRel, Ordering::Relaxed, guard);
         todo!()
     }
 }
