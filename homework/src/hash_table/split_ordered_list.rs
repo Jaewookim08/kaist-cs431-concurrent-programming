@@ -137,13 +137,19 @@ impl<V> NonblockingMap<usize, V> for SplitOrderedList<V> {
         if found {
             Err(value)
         } else {
-            let prev_count = self.count.fetch_add(1, Ordering::AcqRel);
-            cursor.insert(Owned::new(Node::new(key.reverse_bits() + 1, Some(value))), guard).unwrap();
-            if prev_count + 1 > size * Self::LOAD_FACTOR {
-                self.size.compare_exchange(size, size * 2, Ordering::Release, Ordering::Relaxed);
+            let new_node = Owned::new(Node::new(key.reverse_bits() + 1, Some(value)));
+            match cursor.insert(new_node, guard) {
+                Ok(_) => {
+                    let prev_count = self.count.fetch_add(1, Ordering::AcqRel);
+                    if prev_count + 1 > size * Self::LOAD_FACTOR {
+                        self.size.compare_exchange(size, size * 2, Ordering::Release, Ordering::Relaxed);
+                    }
+                    Ok(())
+                }
+                Err(new_node) => {
+                    Err((*new_node.into_box()).into_value().unwrap())
+                }
             }
-
-            Ok(())
         }
     }
 
