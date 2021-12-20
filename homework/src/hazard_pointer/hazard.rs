@@ -34,7 +34,20 @@ impl<T> Shield<T> {
     ///    latest value.
     /// 3. If validated, return true. Otherwise, clear the slot (store 0) and return false.
     pub fn try_protect(&self, pointer: &mut *const T, src: &AtomicPtr<T>) -> bool {
-        todo!()
+        unsafe {
+            let ptr = (*pointer);
+            let slot = self.slot.as_ref();
+            slot.hazard.store(ptr as usize, Ordering::Release);
+            let loaded = src.load(Ordering::Acquire) as * const T;
+            if loaded == ptr {
+                true
+            }
+            else {
+                *pointer = loaded;
+                slot.hazard.store(0, Ordering::Release);
+                false
+            }
+        }
     }
 
     /// Get a protected pointer from `src`.
