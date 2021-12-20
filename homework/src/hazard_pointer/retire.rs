@@ -44,6 +44,8 @@ impl<'s> RetiredSet<'s> {
     /// Free the pointers that are `retire`d by the current thread and not `protect`ed by any other
     /// threads.
     pub fn collect(&mut self) {
+        fence(Ordering::SeqCst);
+
         let hazards = self.hazards.all_hazards();
 
         let asdf = &mut self.inner;
@@ -58,6 +60,8 @@ impl<'s> RetiredSet<'s> {
         }
 
         self.inner = new_inner;
+        fence(Ordering::SeqCst);
+
     }
 }
 

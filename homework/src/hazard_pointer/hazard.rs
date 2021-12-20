@@ -35,15 +35,34 @@ impl<T> Shield<T> {
     /// 3. If validated, return true. Otherwise, clear the slot (store 0) and return false.
     pub fn try_protect(&self, pointer: &mut *const T, src: &AtomicPtr<T>) -> bool {
         unsafe {
+            fence(Ordering::SeqCst);
+
             let ptr = (*pointer);
+            fence(Ordering::SeqCst);
+
             let slot = self.slot.as_ref();
+            fence(Ordering::SeqCst);
+
             slot.hazard.store(ptr as usize, Ordering::Release);
+            fence(Ordering::SeqCst);
+
             let loaded = src.load(Ordering::Acquire) as *const T;
+            fence(Ordering::SeqCst);
+
             if loaded == ptr {
+                fence(Ordering::SeqCst);
                 true
             } else {
+                fence(Ordering::SeqCst);
+
                 *pointer = loaded;
+
+                fence(Ordering::SeqCst);
+
                 slot.hazard.store(0, Ordering::Release);
+
+                fence(Ordering::SeqCst);
+
                 false
             }
         }
