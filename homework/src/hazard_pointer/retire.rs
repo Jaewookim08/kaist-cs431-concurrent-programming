@@ -37,19 +37,27 @@ impl<'s> RetiredSet<'s> {
         }
 
         self.inner.push((pointer as usize, free::<T>));
+        if self.inner.len() >= Self::THRESHOLD {
+            self.collect();
+        }
     }
-
     /// Free the pointers that are `retire`d by the current thread and not `protect`ed by any other
     /// threads.
     pub fn collect(&mut self) {
         let hazards = self.hazards.all_hazards();
-        for (ptr, free) in &self.inner {
+
+        let asdf = &mut self.inner;
+        let mut new_inner = Vec::<(usize, unsafe fn(usize))>::new();
+        for (ptr, free) in asdf {
             if hazards.contains(&ptr) {
+                new_inner.push((*ptr, *free));
                 continue;
             }
 
             unsafe { free(*ptr); }
         }
+
+        self.inner = new_inner;
     }
 }
 
