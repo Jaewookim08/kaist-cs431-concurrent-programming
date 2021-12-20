@@ -38,11 +38,10 @@ impl<T> Shield<T> {
             let ptr = (*pointer);
             let slot = self.slot.as_ref();
             slot.hazard.store(ptr as usize, Ordering::Release);
-            let loaded = src.load(Ordering::Acquire) as * const T;
+            let loaded = src.load(Ordering::Acquire) as *const T;
             if loaded == ptr {
                 true
-            }
-            else {
+            } else {
                 *pointer = loaded;
                 slot.hazard.store(0, Ordering::Release);
                 false
@@ -70,7 +69,11 @@ impl<T> Default for Shield<T> {
 impl<T> Drop for Shield<T> {
     /// Clear and release the ownership of the hazard slot.
     fn drop(&mut self) {
-        todo!()
+        unsafe {
+            let slot = self.slot.as_ref();
+            slot.hazard.store(0, Ordering::Release);
+            slot.active.store(false, Ordering::Release);
+        }
     }
 }
 
