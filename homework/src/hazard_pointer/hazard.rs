@@ -159,7 +159,19 @@ impl HazardBag {
 
     /// Returns all the hazards in the set.
     pub fn all_hazards(&self) -> HashSet<usize> {
-        todo!()
+        unsafe {
+            let mut ret = HashSet::<usize>::new();
+
+            let mut curr_p: *const HazardSlot = self.head.load(Ordering::Acquire);
+            while !curr_p.is_null() {
+                let curr = &*curr_p;
+                if curr.active.load(Ordering::Acquire) == true {
+                    let hazard = curr.hazard.load(Ordering::Acquire);  // Todo:
+                    ret.insert(hazard);
+                }
+            };
+            ret
+        }
     }
 }
 
