@@ -2,7 +2,8 @@
 
 use core::mem;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use crossbeam_epoch::{Guard, Owned};
+use std::ptr::null;
+use crossbeam_epoch::{Atomic, CompareExchangeError, Guard, Owned, Pointer, Shared};
 use lockfree::list::{Cursor, List, Node};
 
 use super::growable_array::GrowableArray;
@@ -34,6 +35,15 @@ impl<V> Default for SplitOrderedList<V> {
     }
 }
 
+fn get_top_bit(n: usize) -> usize {
+    let mut a: usize = 1;
+    while n >= a {
+        a <<= 1;
+    }
+    a >>= 1;
+    a
+}
+
 impl<V> SplitOrderedList<V> {
     /// `size` is doubled when `count > size * LOAD_FACTOR`.
     const LOAD_FACTOR: usize = 2;
@@ -46,7 +56,40 @@ impl<V> SplitOrderedList<V> {
     /// Creates a cursor and moves it to the bucket for the given index.  If the bucket doesn't
     /// exist, recursively initializes the buckets.
     fn lookup_bucket<'s>(&'s self, index: usize, guard: &'s Guard) -> Cursor<'s, usize, Option<V>> {
-        todo!()
+        unsafe {
+            loop {
+                let sentinel = self.buckets.get(index, guard);
+                let sentinel_read = sentinel.load(Ordering::Acquire, guard);
+
+                if !sentinel_read.is_null() {
+                    return Cursor::from_raw(sentinel, sentinel_read.as_raw());
+                }
+                else {
+                    let mut cursor = if index == 0 {
+                        self.list.head(guard)
+                    }
+                    else {
+                        let prev_bucket_ind = index - get_top_bit(index);
+                        self.lookup_bucket(prev_bucket_ind, guard)
+                    };
+
+                    let new_bucket_key = index.reverse_bits();
+                    let new_bucket_raw = Owned::new(Node::new(new_bucket_key, None::<V>)).into_usize();
+
+                    cursor.find_harris(&new_bucket_key, guard);
+                    if let Err(_) = cursor.insert(Owned::from_usize(new_bucket_raw), guard) {
+                        continue;
+                    }
+
+
+                    match sentinel.compare_exchange(
+                        Shared::null(), Shared::from_usize(new_bucket_raw), Ordering::Release, Ordering::Relaxed, guard){
+                        Ok(_) => {}
+                        Err(_) => {cursor.delete(guard);}
+                    }
+                }
+            }
+        }
     }
 
     /// Moves the bucket cursor returned from `lookup_bucket` to the position of the given key.
