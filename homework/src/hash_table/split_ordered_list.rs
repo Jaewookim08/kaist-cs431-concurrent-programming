@@ -101,7 +101,7 @@ impl<V> SplitOrderedList<V> {
         let mut cursor = self.lookup_bucket(index, guard);
 
         let found =
-            cursor.find_harris(&key.reverse_bits(), guard).expect("find failed");
+            cursor.find_harris(&(key.reverse_bits() + 1), guard).unwrap();
 
         (size, found, cursor)
     }
