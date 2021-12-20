@@ -150,7 +150,7 @@ impl HazardBag {
 
                 match self.head.compare_exchange(head, new_slot_raw, Ordering::Release, Ordering::Relaxed) {
                     Ok(_) => { return &*new_slot_raw; }
-                    Err(e) => { /*drop(Box::from_raw(e)) */ }
+                    Err(_) => { drop(Box::from_raw(new_slot_raw)) }
                 }
             }
         }
