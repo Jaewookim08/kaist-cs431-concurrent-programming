@@ -5,6 +5,8 @@ use std::fmt;
 
 #[cfg(not(feature = "check-loom"))]
 use core::sync::atomic::{fence, AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+use std::ops::Deref;
+use std::ptr::null;
 #[cfg(feature = "check-loom")]
 use loom::sync::atomic::{fence, AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
@@ -40,7 +42,7 @@ impl<T> Shield<T> {
         let mut pointer = src.load(Ordering::Relaxed) as *const T;
         while !self.try_protect(&mut pointer, src) {
             #[cfg(feature = "check-loom")]
-            loom::sync::atomic::spin_loop_hint();
+                loom::sync::atomic::spin_loop_hint();
         }
         pointer
     }
@@ -88,8 +90,12 @@ struct HazardSlot {
 }
 
 impl HazardSlot {
-    fn new() -> Self {
-        todo!()
+    fn new(next: *const HazardSlot) -> Self {
+        Self {
+            active: AtomicBool::new(false),
+            hazard: AtomicUsize::new(0),
+            next,
+        }
     }
 }
 
@@ -110,15 +116,45 @@ impl HazardBag {
         }
     }
 
-    /// Acquires a slot in the hazard set, either by recyling an inactive slot or allocating a new
+    /// Acquires a slot in the hazard set, either by recycling an inactive slot or allocating a new
     /// slot.
     fn acquire_slot(&self) -> &HazardSlot {
-        todo!()
+        unsafe {
+            // try recycling an inactive slot
+            if let Some(slot) = self.try_acquire_inactive() {
+                return slot;
+            }
+
+            // allocate a new slot and return
+            loop {
+                let head = self.head.load(Ordering::Acquire);
+                let new_slot = Box::new(HazardSlot::new(head));
+                new_slot.active.store(true, Ordering::Release);
+                let new_slot_raw = Box::into_raw(new_slot);
+                match self.head.compare_exchange(head, new_slot_raw, Ordering::Release, Ordering::Relaxed) {
+                    Ok(_) => { return &*new_slot_raw; }
+                    Err(e) => { drop(Box::from_raw(e)) }
+                }
+            }
+        }
     }
 
     /// Find an inactive slot and activate it.
     fn try_acquire_inactive(&self) -> Option<&HazardSlot> {
-        todo!()
+        unsafe {
+            let mut curr_p: *const HazardSlot = self.head.load(Ordering::Acquire);
+            while !curr_p.is_null() {
+                let curr = &*curr_p;
+                match curr.active.compare_exchange(false, true, Ordering::Release, Ordering::Relaxed) {
+                    Ok(_) => {
+                        return Some(curr);
+                    }
+                    Err(_) => {}
+                }
+                curr_p = curr.next;
+            };
+            None
+        }
     }
 
     /// Returns all the hazards in the set.
@@ -134,6 +170,7 @@ impl Drop for HazardBag {
 }
 
 unsafe impl Send for HazardSlot {}
+
 unsafe impl Sync for HazardSlot {}
 
 #[cfg(all(test, not(feature = "check-loom")))]
