@@ -114,16 +114,58 @@ impl<V> SplitOrderedList<V> {
 impl<V> NonblockingMap<usize, V> for SplitOrderedList<V> {
     fn lookup<'a>(&'a self, key: &usize, guard: &'a Guard) -> Option<&'a V> {
         Self::assert_valid_key(*key);
-        todo!()
+        let (_, found, cursor) = self.find(key, guard);
+        if found {
+            let a = cursor.lookup();
+            match a {
+                None => { None }
+                Some(dd) => {
+                    match dd {
+                        None => { None }
+                        Some(dd) => { Some(dd) }
+                    }
+                }
+            }
+        } else {
+            None
+        }
     }
 
     fn insert(&self, key: &usize, value: V, guard: &Guard) -> Result<(), V> {
         Self::assert_valid_key(*key);
-        todo!()
+        let (size, found, mut cursor) = self.find(key, guard);
+        if found {
+            Err(value)
+        } else {
+            let prev_count = self.count.fetch_add(1, Ordering::AcqRel);
+            cursor.insert(Owned::new(Node::new(key.reverse_bits() + 1, Some(value))), guard).unwrap();
+            if prev_count + 1 > size * Self::LOAD_FACTOR {
+                self.size.compare_exchange(size, size * 2, Ordering::Release, Ordering::Relaxed);
+            }
+
+            Ok(())
+        }
     }
 
     fn delete<'a>(&'a self, key: &usize, guard: &'a Guard) -> Result<&'a V, ()> {
         Self::assert_valid_key(*key);
-        todo!()
+
+        let (_, found, mut cursor) = self.find(key, guard);
+        if found {
+            self.count.fetch_sub(1, Ordering::AcqRel);
+            let ret = cursor.delete(guard);
+
+            match ret {
+                Ok(op) => {
+                    match op {
+                        None => { Err(()) }
+                        Some(v) => { Ok(v) }
+                    }
+                }
+                Err(_) => { Err(()) }
+            }
+        } else {
+            Err(())
+        }
     }
 }
