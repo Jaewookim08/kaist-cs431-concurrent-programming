@@ -63,12 +63,10 @@ impl<V> SplitOrderedList<V> {
 
                 if !sentinel_read.is_null() {
                     return Cursor::from_raw(sentinel, sentinel_read.as_raw());
-                }
-                else {
+                } else {
                     let mut cursor = if index == 0 {
                         self.list.head(guard)
-                    }
-                    else {
+                    } else {
                         let prev_bucket_ind = index - get_top_bit(index);
                         self.lookup_bucket(prev_bucket_ind, guard)
                     };
@@ -83,9 +81,9 @@ impl<V> SplitOrderedList<V> {
 
 
                     match sentinel.compare_exchange(
-                        Shared::null(), Shared::from_usize(new_bucket_raw), Ordering::Release, Ordering::Relaxed, guard){
+                        Shared::null(), Shared::from_usize(new_bucket_raw), Ordering::Release, Ordering::Relaxed, guard) {
                         Ok(_) => {}
-                        Err(_) => {cursor.delete(guard);}
+                        Err(_) => { cursor.delete(guard); }
                     }
                 }
             }
@@ -99,7 +97,14 @@ impl<V> SplitOrderedList<V> {
         key: &usize,
         guard: &'s Guard,
     ) -> (usize, bool, Cursor<'s, usize, Option<V>>) {
-        todo!()
+        let size = self.size.load(Ordering::Acquire);
+        let index = key % size;
+        let mut cursor = self.lookup_bucket(index, guard);
+
+        let found =
+            cursor.find_harris(&key.reverse_bits(), guard).expect("find failed");
+
+        (size, found, cursor)
     }
 
     fn assert_valid_key(key: usize) {
