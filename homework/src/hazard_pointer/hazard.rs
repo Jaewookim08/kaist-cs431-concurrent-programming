@@ -108,7 +108,7 @@ struct HazardSlot {
 impl HazardSlot {
     fn new(next: *const HazardSlot) -> Self {
         Self {
-            active: AtomicBool::new(false),
+            active: AtomicBool::new(true),
             hazard: AtomicUsize::new(0),
             next,
         }
@@ -145,11 +145,12 @@ impl HazardBag {
             loop {
                 let head = self.head.load(Ordering::Acquire);
                 let new_slot = Box::new(HazardSlot::new(head));
-                new_slot.active.store(true, Ordering::Release);
+
                 let new_slot_raw = Box::into_raw(new_slot);
+
                 match self.head.compare_exchange(head, new_slot_raw, Ordering::Release, Ordering::Relaxed) {
                     Ok(_) => { return &*new_slot_raw; }
-                    Err(e) => { drop(Box::from_raw(e)) }
+                    Err(e) => { /*drop(Box::from_raw(e)) */ }
                 }
             }
         }
@@ -185,6 +186,7 @@ impl HazardBag {
                     let hazard = curr.hazard.load(Ordering::Acquire);  // Todo:
                     ret.insert(hazard);
                 }
+                curr_p = curr.next;
             };
             ret
         }
