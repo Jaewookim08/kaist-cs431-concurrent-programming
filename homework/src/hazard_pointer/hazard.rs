@@ -193,7 +193,16 @@ impl HazardBag {
 
 impl Drop for HazardBag {
     fn drop(&mut self) {
-        todo!()
+        unsafe {
+            let mut curr_p: *const HazardSlot = self.head.load(Ordering::Acquire);
+
+            while !curr_p.is_null() {
+                let next_p = (*curr_p).next;
+                drop(Box::from_raw(curr_p as *mut HazardSlot));
+
+                curr_p = next_p;
+            };
+        }
     }
 }
 
