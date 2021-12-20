@@ -72,16 +72,15 @@ impl<V> SplitOrderedList<V> {
                     };
 
                     let new_bucket_key = index.reverse_bits();
-                    let new_bucket_raw = Owned::new(Node::new(new_bucket_key, None::<V>)).into_usize();
+                    let new_bucket = Owned::new(Node::new(new_bucket_key, None::<V>));
 
                     cursor.find_harris(&new_bucket_key, guard);
-                    if let Err(_) = cursor.insert(Owned::from_usize(new_bucket_raw), guard) {
+                    if let Err(_) = cursor.insert(new_bucket, guard) {
                         continue;
                     }
 
-
                     match sentinel.compare_exchange(
-                        Shared::null(), Shared::from_usize(new_bucket_raw), Ordering::Release, Ordering::Relaxed, guard) {
+                        Shared::null(), cursor.curr(), Ordering::Release, Ordering::Relaxed, guard) {
                         Ok(_) => {}
                         Err(_) => { cursor.delete(guard); }
                     }
