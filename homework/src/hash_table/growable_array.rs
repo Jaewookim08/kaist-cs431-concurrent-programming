@@ -6,7 +6,7 @@ use core::mem;
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use std::ptr::null;
-use crossbeam_epoch::{unprotected, Atomic, Guard, Owned, Pointer, Shared};
+use crossbeam_epoch::{unprotected, Atomic, Guard, Owned, Pointer, Shared, pin};
 
 /// Growable array of `Atomic<T>`.
 ///
@@ -172,10 +172,27 @@ impl Debug for Segment {
     }
 }
 
+unsafe fn drop_segments_recursively(segment: Shared<Segment>, height: usize) {
+    if segment.is_null() { return; }
+    if height > 1 {
+        // child가 segment들인 경우.
+
+        for child in &**segment.deref() {
+            drop_segments_recursively(Shared::<Segment>::from_usize(child.load(Ordering::Acquire)), height - 1);
+        }
+    }
+    drop(segment.into_owned());
+}
+
 impl<T> Drop for GrowableArray<T> {
     /// Deallocate segments, but not the individual elements.
     fn drop(&mut self) {
-        todo!()
+        unsafe {
+            let guard = pin();
+            let root = self.root.load(Ordering::Acquire, &guard);
+            drop_segments_recursively(root, root.tag());
+            ;
+        }
     }
 }
 
