@@ -191,7 +191,6 @@ impl<T> Drop for GrowableArray<T> {
             let guard = pin();
             let root = self.root.load(Ordering::Acquire, &guard);
             drop_segments_recursively(root, root.tag());
-            ;
         }
     }
 }
@@ -258,7 +257,14 @@ impl<T> GrowableArray<T> {
                     if ns != 0 {
                         break Shared::<Segment>::from_usize(ns);
                     }
-                    next_atomic.compare_exchange(ns, Owned::new(Segment::new()).into_usize(), Ordering::Release, Ordering::Relaxed);
+
+                    let new_seg = Owned::new(Segment::new()).into_usize();
+                    match next_atomic.compare_exchange(0, new_seg, Ordering::Release, Ordering::Relaxed) {
+                        Ok(_) => {}
+                        Err(_) => {
+                            drop(Owned::<Segment>::from_usize(new_seg));
+                        }
+                    }
                 };
                 curr_height -= 1;
             }
