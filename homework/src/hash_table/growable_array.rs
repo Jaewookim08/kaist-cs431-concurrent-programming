@@ -223,14 +223,15 @@ impl<T> GrowableArray<T> {
 
         let ret = unsafe {
             let mut curr_segment = root;
+            assert!(root_height >= 1);
             let mut curr_height = root_height - 1;
 
             loop {
                 let ind = index_nth_part(index, curr_height);
 
 
-                if i == 0 {
-                    break &*(segment.get_unchecked(ind) as *const _ as *const Atomic<T>);
+                if curr_height == 0 {
+                    break &*((curr_segment.deref()).get_unchecked(ind) as *const _ as *const Atomic<T>);
                 }
 
                 let next_atomic = &((*curr_segment.deref())[ind]);
